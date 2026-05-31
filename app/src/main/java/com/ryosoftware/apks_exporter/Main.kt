@@ -1,5 +1,6 @@
 package com.ryosoftware.apks_exporter
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -13,12 +14,13 @@ class Main : Application(), Thread.UncaughtExceptionHandler {
 
     override fun onCreate() {
         super.onCreate()
-        iInstance = this
+        instance = this
         LogUtilities.tag = TAG
-        ApplicationPreferences.initialize()
+        LogUtilities.logMode = LogUtilities.DEBUG_ERRORS
         LogUtilities.show(this, "Application started (current app version is ${getString(R.string.app_version_name_value)} (${getString(R.string.app_version_code_value)}))")
-        LogUtilities.initialize(LogUtilities.DEBUG_ALL, this)
+        ApplicationPreferences.initialize()
         createNotificationsChannels()
+        Thread.setDefaultUncaughtExceptionHandler(this)
     }
 
     private fun createNotificationsChannels() {
@@ -45,6 +47,28 @@ class Main : Application(), Thread.UncaughtExceptionHandler {
                 notificationManager.createNotificationChannel(this)
             }
         }
+        if (notificationManager.getNotificationChannel(AUTO_CREATED_BACKUPS_NONE_NOTIFICATION_CHANNEL) == null) {
+            NotificationChannel(
+                AUTO_CREATED_BACKUPS_NONE_NOTIFICATION_CHANNEL,
+                getString(R.string.auto_created_backups_none),
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                setSound(null, null)
+                description = getString(R.string.auto_created_backups_none)
+                notificationManager.createNotificationChannel(this)
+            }
+        }
+        if (notificationManager.getNotificationChannel(AUTO_CREATED_BACKUPS_ERROR_NOTIFICATION_CHANNEL) == null) {
+            NotificationChannel(
+                AUTO_CREATED_BACKUPS_ERROR_NOTIFICATION_CHANNEL,
+                getString(R.string.auto_created_backups_error),
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                setSound(null, null)
+                description = getString(R.string.auto_created_backups_error)
+                notificationManager.createNotificationChannel(this)
+            }
+        }
     }
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {
@@ -55,11 +79,14 @@ class Main : Application(), Thread.UncaughtExceptionHandler {
         const val BACKGROUND_TASKS_NOTIFICATION_CHANNEL = "background-tasks"
         const val AUTO_CREATED_BACKUPS_NOTIFICATION_CHANNEL = "auto-created-backups-notification"
 
+        const val AUTO_CREATED_BACKUPS_NONE_NOTIFICATION_CHANNEL = "auto-created-backups-none-notification"
+        const val AUTO_CREATED_BACKUPS_ERROR_NOTIFICATION_CHANNEL = "auto-created-backups-error-notification"
+
         private const val TAG = "ApkExporter"
 
-        private var iInstance: Main? = null
-
-        fun getInstance(): Main = iInstance!!
+        @SuppressLint("StaticFieldLeak")
+        lateinit var instance: Context
+            private set
 
         fun getUriFromFile(context: Context, file: File): Uri =
             FileProvider.getUriForFile(

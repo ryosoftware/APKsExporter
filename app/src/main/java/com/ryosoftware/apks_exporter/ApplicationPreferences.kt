@@ -32,20 +32,22 @@ object ApplicationPreferences {
     const val SAVE_FOLDER_KEY = "save-folder"
     const val AUTO_BACKUP_APPS_KEY = "auto-backup-apps"
     var AUTO_BACKUP_APPS_DEFAULT = false
-
     const val THEME_KEY = "theme"
     const val THEME_DARK = "dark"
     const val THEME_LIGHT = "light"
     const val THEME_SYSTEM = "system"
     val THEME_VALUES = arrayOf(THEME_DARK, THEME_LIGHT, THEME_SYSTEM)
     var THEME_DEFAULT = THEME_SYSTEM
-
     const val BLACK_BACKGROUND_KEY = "black-background"
     var BLACK_BACKGROUND_DEFAULT = false
-
     const val USE_SYSTEM_ACCENT_COLOR_KEY = "system-accent-color"
     var USE_SYSTEM_ACCENT_COLOR_DEFAULT = false
     const val SEED_BACKUP_DATA_FOR_ALL_APPS = "seed-backup-data-for-all-apps"
+    const val LAST_AUTO_BACKUP_TIME_KEY = "last-auto-backup-time"
+    const val NEXT_AUTO_BACKUP_TIME_KEY = "next-auto-backup-time"
+
+    const val LAST_BACKED_APP_PACKAGES_KEY = "last-backed-app-packages"
+    const val LAST_BACKUP_ERRORS_COUNT_KEY = "last-backup-errors-count"
 
     private const val VERSION_KEY = "version"
     private const val VERSION_VALUE = 1.1f
@@ -56,7 +58,7 @@ object ApplicationPreferences {
     @PublishedApi
     internal var dataStore: DataStore<Preferences>? = null
 
-    private fun getContext(): Context = Main.getInstance()
+    private fun getContext(): Context = Main.instance
 
     private fun upgrade(edit: MutablePreferences, fromVersion: Float) {
     }
@@ -198,6 +200,24 @@ object ApplicationPreferences {
             }
             dataStore!!.edit { prefs ->
                 prefs[key as Preferences.Key<T>] = value
+            }
+        }
+    }
+
+    fun delete(name: String) {
+        scope.launch {
+            dataStore!!.edit { prefs ->
+                prefs.remove(stringPreferencesKey(name))
+            }
+        }
+    }
+
+    fun delete(names: Array<String>) {
+        scope.launch {
+            dataStore!!.edit { prefs ->
+                for (name in names) {
+                    prefs.remove(stringPreferencesKey(name))
+                }
             }
         }
     }

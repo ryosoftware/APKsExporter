@@ -6,6 +6,8 @@
 
     <string name="background_tasks">Tareas en segundo plano</string>
     <string name="auto_created_backups">Backups automáticos</string>
+    <string name="auto_created_backups_error">Error en Backups automáticos</string>
+    <string name="auto_created_backups_none">Backups automáticos sin cambios</string>
 
     <string name="settings">Configuración</string>
 
@@ -51,9 +53,16 @@
     <string name="automation">Automatización</string>
 
     <string name="auto_backup_apps">Guardado automático</string>
-    <string name="auto_backup_apps_on">Guardar automáticamente los APK de las apps que se instalen o actualicen (se ejecutará un proceso en segundo plano cada cierto tiempo, los backups no se hacen instantáneamente cuando las apps se instalan o actualizan)</string>
+    <string name="auto_backup_apps_on">Guardar automáticamente los APK de las apps que se instalen o actualicen (se siguen las preferencias de visualización seleccionadas más arriba).\nUn proceso en segundo plano se ejecutará cada cierto tiempo y revisará las apps que siguen los criterios (si una app se actualiza varias veces en ese periodo se perdería pate de la historia)</string>
     <string name="auto_backup_apps_off">No guardar automáticamente los APK de las apps que se instalen o actualicen</string>
     <string name="can_automatically_backup">Guardar automáticamente</string>
+
+    <string name="force_backup_now">Crear backups pendientes ahora</string>
+    <string name="auto_backup_last_date">Última ejecución: %1$s</string>
+    <string name="auto_backup_next_date">Próxima ejecución: %1$s</string>
+    <string name="auto_backup_last_date_format">dd/MM/yyyy HH:mm</string>
+    <string name="force_backup_now_summary">Haga click para ejecutar ahora el proceso de backup</string>
+    <string name="force_backup_running">Se está ejecutando el proceso de backup&#8230;</string>
 
     <string name="appearance">Apariencia</string>
 
@@ -110,7 +119,7 @@
 
     <string name="checking_if_recently_installed_or_updated_apps">Comprobando si hay apps recién instaladas o actualizadas</string>
 
-    <string name="error_performing_auto_apps_backup">Se ha producido un error al intentar crear el backup de las apps recién instaladas o actualizadas</string>
+    <string name="error_performing_auto_apps_backup">Se ha producido un error inesperado al intentar crear el backup de las apps recién instaladas o actualizadas</string>
 
     <string name="cant_complete_requested_operation">¡Operación finalizada con error!</string>
     <string name="install_success">Aplicación instalada</string>

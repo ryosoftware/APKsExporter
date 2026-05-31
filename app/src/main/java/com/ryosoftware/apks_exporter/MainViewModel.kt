@@ -79,7 +79,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             prefs[longPreferencesKey(getLastAppUpdateTimeKey(pi.packageName))] = 0L
                             prefs[intPreferencesKey(getLastAppUpdateNotificationTimesKey(pi.packageName))] = Int.MAX_VALUE
 
-                            MainService.setBackupDone(pi)
+                            prefs[longPreferencesKey(getLastBackupVersionNumberKey(pi.packageName))] = pi.longVersionCode
+                            prefs[longPreferencesKey(getLastBackupTimeKey(pi.packageName))] = System.currentTimeMillis()
                         }
                         prefs[booleanPreferencesKey(ApplicationPreferences.IS_FIRST_APP_LAUNCH_TIME)] = false
                         prefs[booleanPreferencesKey(ApplicationPreferences.SEED_BACKUP_DATA_FOR_ALL_APPS)] = false

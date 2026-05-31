@@ -1,9 +1,11 @@
 package com.ryosoftware.apks_exporter
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
-import android.text.format.DateUtils
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.ryosoftware.utilities.PermissionUtilities
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.res.stringResource
 import androidx.core.net.toUri
 
@@ -122,6 +125,18 @@ fun PreferencesScreen(onNavigateBack: () -> Unit) {
         ApplicationPreferences.get(ApplicationPreferences.AUTO_BACKUP_APPS_KEY, ApplicationPreferences.AUTO_BACKUP_APPS_DEFAULT)
     }
     var showBackupWarningDialog by remember { mutableStateOf(false) }
+    var isBackupRunning by rememberSaveable { mutableStateOf(false) }
+
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                isBackupRunning = false
+            }
+        }
+        val filter = IntentFilter(MainBackupWorker.ACTION_AUTO_BACKUP_APPS_DONE)
+        context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
 
     fun handleBack() {
         if (autoBackupApps && (
@@ -209,7 +224,6 @@ fun PreferencesScreen(onNavigateBack: () -> Unit) {
             if (!PermissionUtilities.permissionGranted(context, Manifest.permission.POST_NOTIFICATIONS)) {
                 permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
-            MainService.execute(context, DateUtils.MINUTE_IN_MILLIS)
         }
     }
 
@@ -375,6 +389,56 @@ fun PreferencesScreen(onNavigateBack: () -> Unit) {
                     onCheckedChange = ::setAutoBackupApps
                 )
             }
+            item {
+                ClickablePreference(
+                    title = stringResource(R.string.force_backup_now),
+                    summary = if (isBackupRunning) {
+                        stringResource(R.string.force_backup_running)
+                    } else buildString {
+                        val lastBackupTime = ApplicationPreferences.get(ApplicationPreferences.LAST_AUTO_BACKUP_TIME_KEY, 0L)
+                        val nextBackupTime = ApplicationPreferences.get(ApplicationPreferences.NEXT_AUTO_BACKUP_TIME_KEY, 0L)
+                        if (lastBackupTime > 0) {
+                            append(
+                                stringResource(
+                                    R.string.auto_backup_last_date,
+                                    java.time.Instant.ofEpochMilli(lastBackupTime)
+                                        .atZone(java.time.ZoneId.systemDefault())
+                                        .toLocalDateTime()
+                                        .format(
+                                            java.time.format.DateTimeFormatter.ofPattern(
+                                                stringResource(R.string.auto_backup_last_date_format)
+                                            )
+                                        )
+                                )
+                            )
+                            append("\n")
+                        }
+                        if (nextBackupTime > 0) {
+                            append(
+                                stringResource(
+                                    R.string.auto_backup_next_date,
+                                    java.time.Instant.ofEpochMilli(nextBackupTime)
+                                        .atZone(java.time.ZoneId.systemDefault())
+                                        .toLocalDateTime()
+                                        .format(
+                                            java.time.format.DateTimeFormatter.ofPattern(
+                                                stringResource(R.string.auto_backup_last_date_format)
+                                            )
+                                        )
+                                )
+                            )
+                            append("\n")
+                        }
+                        if ((lastBackupTime > 0) || (nextBackupTime > 0)) append("\n")
+                        append(stringResource(R.string.force_backup_now_summary))
+                    },
+                    enabled = autoBackupApps && (!isBackupRunning),
+                    onClick = {
+                        isBackupRunning = true
+                        MainBackupWorker.onBackupForced(context)
+                    }
+                )
+            }
 
             item {
                 SectionHeader(stringResource(R.string.appearance))
@@ -489,12 +553,13 @@ private fun SwitchPreference(
 private fun ClickablePreference(
     title: String,
     summary: String,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = { Text(summary) },
-        modifier = Modifier.clickable(onClick = onClick)
+        modifier = Modifier.clickable(enabled = enabled, onClick = onClick)
     )
 }
 

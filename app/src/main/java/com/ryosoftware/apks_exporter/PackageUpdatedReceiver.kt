@@ -9,6 +9,6 @@ class PackageUpdatedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
         LogUtilities.show(this, "Received event '$action'")
-        if (Intent.ACTION_MY_PACKAGE_REPLACED == action) MainService.onPackageAddedOrUpdated(context)
+        if (Intent.ACTION_MY_PACKAGE_REPLACED == action) MainBackupWorker.onPackageAddedOrUpdated(context)
     }
 }

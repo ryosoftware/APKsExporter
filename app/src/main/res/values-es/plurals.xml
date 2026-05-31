@@ -1,5 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
 
+    <string name="auto_apps_backup_none">No se necesita hacer backup de ninguna de las apps instaladas</string>
+
     <plurals name="auto_apps_backup_ended_without_error">
         <item quantity="one">Se ha creado el backup de %2$s</item>
         <item quantity="other">Se han creado los backups de %2$s</item>

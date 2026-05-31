@@ -51,7 +51,7 @@ class InstallAppTask(
                     installApp(uri)
                     return true
                 } else if (lowerPath.endsWith(".zip")) {
-                    val context = Main.getInstance()
+                    val context = Main.instance
                     val externalFilesDir = context.getExternalFilesDir("tmp_install")
                     if (externalFilesDir != null) {
                         val previousInstallTmpFiles = externalFilesDir.listFiles()
@@ -92,7 +92,7 @@ class InstallAppTask(
     }
 
     private fun addApkToSession(session: PackageInstaller.Session, apkUri: Uri) {
-        Main.getInstance().contentResolver.openInputStream(apkUri)?.use { inputStream ->
+        Main.instance.contentResolver.openInputStream(apkUri)?.use { inputStream ->
             writeStreamToSession(inputStream, session)
         }
     }
@@ -105,7 +105,7 @@ class InstallAppTask(
 
     @SuppressLint("RequestInstallPackagesPolicy")
     private fun installApp(apkReferences: List<Any>) {
-        val context = Main.getInstance()
+        val context = Main.instance
         val packageInstaller = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         val sessionId = packageInstaller.createSession(params)

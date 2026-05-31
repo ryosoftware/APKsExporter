@@ -38,7 +38,13 @@
 
         <receiver android:name=".InstallCompletedReceiver" android:exported="true">
             <intent-filter >
-                <action android:name="com.ryosoftware.apkexporter.InstallCompletedReceiver.INSTALL_COMPLETED" />
+                <action android:name="com.ryosoftware.apkexporter.INSTALL_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name=".AutoBackupDismissedReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.ryosoftware.apks_exporter.ACTION_NOTIFICATION_DISMISSED" />
             </intent-filter>
         </receiver>
 

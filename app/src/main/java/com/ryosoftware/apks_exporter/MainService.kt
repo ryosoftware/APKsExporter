@@ -34,38 +34,6 @@ object MainService {
 
     private const val BASE_APK_FILENAME = "base.apk"
     const val REMOVABLE_SPLIT_PREFIX = "split_"
-    const val AUTO_BACKUP_APPS = "auto-backup-apps"
-    const val ACTION_AUTO_BACKUP_APPS_DONE = BuildConfig.APPLICATION_ID + ".AUTO_BACKUPS_DONE"
-    private const val INTERVAL_BEFORE_AUTO_BACKUP_APPS_AFTER_BOOT = 30 * DateUtils.SECOND_IN_MILLIS
-    private const val INTERVAL_BEFORE_AUTO_BACKUP_APPS_AFTER_APP_UPDATED = 30 * DateUtils.SECOND_IN_MILLIS
-    private const val INTERVAL_BEFORE_AUTO_BACKUP_APPS_WHEN_APP_EXECUTED = 5 * DateUtils.SECOND_IN_MILLIS
-
-    fun execute(context: Context, delay: Long) {
-        if (ApplicationPreferences.get(
-                ApplicationPreferences.AUTO_BACKUP_APPS_KEY,
-                ApplicationPreferences.AUTO_BACKUP_APPS_DEFAULT
-            )
-        ) {
-            val request = OneTimeWorkRequestBuilder<MainBackupWorker>()
-                .setInitialDelay(delay, TimeUnit.MILLISECONDS)
-                .addTag(AUTO_BACKUP_APPS)
-                .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                AUTO_BACKUP_APPS,
-                ExistingWorkPolicy.REPLACE,
-                request
-            )
-        }
-    }
-
-    fun execute(context: Context) = execute(context, 0)
-
-    fun onBootCompleted(context: Context) = execute(context, INTERVAL_BEFORE_AUTO_BACKUP_APPS_AFTER_BOOT)
-
-    fun onPackageAddedOrUpdated(context: Context) = execute(context, INTERVAL_BEFORE_AUTO_BACKUP_APPS_AFTER_APP_UPDATED)
-
-    fun onAppExecuted(context: Context) = execute(context, INTERVAL_BEFORE_AUTO_BACKUP_APPS_WHEN_APP_EXECUTED)
-
     fun isSystemApplication(packageInfo: PackageInfo): Boolean =
         (packageInfo.applicationInfo != null) &&
                 ((packageInfo.applicationInfo!!.flags and ApplicationInfo.FLAG_SYSTEM) == ApplicationInfo.FLAG_SYSTEM)
@@ -275,7 +243,7 @@ object MainService {
             } else {
                 var appFolderDocument = backupsFolderDocument.findFile(appName)
                 if (appFolderDocument == null) {
-                    appFolderDocument = backupsFolderDocument.createDirectory(packageInfo.packageName)
+                    appFolderDocument = backupsFolderDocument.createDirectory(appName)
                 }
                 var appVersionDocument = appFolderDocument?.findFile(appVersionNumber)
                 if (appVersionDocument == null) {
@@ -296,6 +264,7 @@ object MainService {
                 }
             }
             setBackupDone(packageInfo)
+            setAppUpdated(packageInfo)
             return true
         } catch (e: Exception) {
             LogUtilities.show(MainService::class.java, e)

@@ -9,6 +9,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
         LogUtilities.show(this, "Received event $action")
-        if (Intent.ACTION_BOOT_COMPLETED == action) MainService.onBootCompleted(context)
+        if (Intent.ACTION_BOOT_COMPLETED == action) MainBackupWorker.onBootCompleted(context)
     }
 }

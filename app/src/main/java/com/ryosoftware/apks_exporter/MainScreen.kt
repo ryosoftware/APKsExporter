@@ -2,7 +2,10 @@ package com.ryosoftware.apks_exporter
 
 import android.Manifest
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.provider.Settings
@@ -107,6 +110,34 @@ fun MainScreen(
                 installPermissionLauncher.launch(intent)
             }
         }
+    }
+
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent) {
+                if (intent.action == Intent.ACTION_PACKAGE_REMOVED) {
+                    intent.data?.schemeSpecificPart?.let { packageName ->
+                        ApplicationPreferences.removePackagePreferences(packageName)
+                    }
+                }
+                viewModel.loadData()
+            }
+        }
+        val packageFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addDataScheme("package")
+        }
+        context.registerReceiver(receiver, packageFilter, Context.RECEIVER_EXPORTED)
+
+        val backupFilter = IntentFilter(MainBackupWorker.ACTION_AUTO_BACKUP_APPS_DONE)
+        context.registerReceiver(receiver, backupFilter, Context.RECEIVER_EXPORTED)
+
+        val saveFilter = IntentFilter("${BuildConfig.APPLICATION_ID}.SAVE_TASKS_FINISHED")
+        context.registerReceiver(receiver, saveFilter, Context.RECEIVER_EXPORTED)
+
+        onDispose { context.unregisterReceiver(receiver) }
     }
 
     StatusBarUtilities.setColor(activity, MaterialTheme.colorScheme.primary.toArgb())
@@ -874,7 +905,7 @@ private fun doSaveApps(
             }
         }
         onFinish()
-        val context = Main.getInstance()
+        val context = Main.instance
         Toast.makeText(
             context,
             if (success) R.string.operation_done else R.string.cant_complete_requested_operation,
@@ -897,9 +928,8 @@ private fun doInstallApp(
         override fun onInstallAppTaskStarted() {}
         override fun onInstallAppTaskFinished(success: Boolean) {
             onFinish()
-            val context = Main.getInstance()
             Toast.makeText(
-                context,
+                Main.instance,
                 if (success) R.string.operation_done else R.string.cant_complete_requested_operation,
                 Toast.LENGTH_LONG
             ).show()

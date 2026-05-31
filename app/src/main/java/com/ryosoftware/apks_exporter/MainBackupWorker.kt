@@ -13,6 +13,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.*
 import com.ryosoftware.utilities.*
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 class MainBackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -75,83 +77,181 @@ class MainBackupWorker(context: Context, params: WorkerParameters) : CoroutineWo
     }
 
     private fun getBackedAppsNotification(
-        success: Boolean,
-        backedApps: List<String>?
-    ): Notification? {
-        val count = backedApps?.size ?: 0
-        if (!success || count > 0) {
-            val notification = NotificationCompat.Builder(applicationContext, Main.AUTO_CREATED_BACKUPS_NOTIFICATION_CHANNEL)
-            val body = if (count > 0) {
-                applicationContext.resources.getQuantityString(
-                    if (success) R.plurals.auto_apps_backup_ended_without_error
+        backedApps: Map<String, String>,
+        crash: Boolean,
+        errors: Int
+    ): Notification {
+        val backedAppsCount = backedApps.size ?: 0
+        var body: String
+        val channelId: String
+
+        if (crash) {
+            body = applicationContext.getString(R.string.error_performing_auto_apps_backup)
+            channelId = Main.AUTO_CREATED_BACKUPS_ERROR_NOTIFICATION_CHANNEL
+        }
+        else if (backedAppsCount == 0) {
+            body = applicationContext.getString(R.string.auto_apps_backup_none)
+            channelId = Main.AUTO_CREATED_BACKUPS_NONE_NOTIFICATION_CHANNEL
+        }
+        else {
+            body = applicationContext.resources.getQuantityString(
+                    if (errors == 0) R.plurals.auto_apps_backup_ended_without_error
                     else R.plurals.auto_apps_backup_ended_with_error,
-                    count,
-                    count,
-                    StringUtilities.join(backedApps, applicationContext.getString(R.string.strings_middle_separator), applicationContext.getString(R.string.strings_and_separator))
+                    backedAppsCount,
+                    backedAppsCount,
+                    StringUtilities.join(backedApps.values.toList(), applicationContext.getString(R.string.strings_middle_separator), applicationContext.getString(R.string.strings_and_separator)),
+                    errors
                 )
-            } else {
-                applicationContext.getString(R.string.error_performing_auto_apps_backup)
-            }
-            notification.setContentTitle(applicationContext.getString(R.string.app_name))
-            notification.setContentText(body)
-            notification.setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            notification.setSmallIcon(R.drawable.ic_stat_notification_auto_created_backups)
-            notification.setWhen(System.currentTimeMillis())
-            notification.setShowWhen(true)
-            notification.setContentIntent(
-                PendingIntent.getActivity(
+            channelId = Main.AUTO_CREATED_BACKUPS_NOTIFICATION_CHANNEL
+        }
+        val notification = NotificationCompat.Builder(applicationContext, channelId)
+        notification.setContentTitle(applicationContext.getString(R.string.app_name))
+        notification.setContentText(body)
+        notification.setStyle(NotificationCompat.BigTextStyle().bigText(body))
+        notification.setSmallIcon(R.drawable.ic_stat_notification_auto_created_backups)
+        notification.setWhen(System.currentTimeMillis())
+        notification.setShowWhen(true)
+        notification.setContentIntent(
+            PendingIntent.getActivity(
+                applicationContext,
+                BACKED_APPS_NOTIFICATION_ID,
+                Intent(applicationContext, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        )
+        notification.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        notification.setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        if (!crash) {
+            notification.setDeleteIntent(
+                PendingIntent.getBroadcast(
                     applicationContext,
-                    BACKED_APPS_NOTIFICATION_ID,
-                    Intent(applicationContext, MainActivity::class.java),
+                    0,
+                    Intent(applicationContext, AutoBackupDismissedReceiver::class.java).apply {
+                        action = ACTION_NOTIFICATION_DISMISSED
+                    },
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
             )
-            notification.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            notification.setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            return notification.build()
         }
-        return null
+        return notification.build()
+    }
+
+    fun persistAutoBackupAppsData(backedApps: Map<String, String>, errors: Int) {
+        ApplicationPreferences.put(ApplicationPreferences.LAST_BACKED_APP_PACKAGES_KEY, JSONObject(backedApps).toString())
+        ApplicationPreferences.put(ApplicationPreferences.LAST_BACKUP_ERRORS_COUNT_KEY, errors)
+    }
+
+    private fun getPersistedAutoBackupAppsData(): Pair<MutableMap<String, String>, Int> {
+        val json = ApplicationPreferences.get(ApplicationPreferences.LAST_BACKED_APP_PACKAGES_KEY, "")
+        val errors = ApplicationPreferences.get(ApplicationPreferences.LAST_BACKUP_ERRORS_COUNT_KEY, 0)
+        val backedApps = if (json.isNotEmpty()) {
+            val jsonObject = JSONObject(json)
+            jsonObject.keys().asSequence().associateWith { jsonObject.getString(it) }.toMutableMap()
+        } else {
+            mutableMapOf()
+        }
+        return backedApps to errors
     }
 
     @SuppressLint("MissingPermission")
     private fun doAutoBackupApps() {
-        var success = true
-        var backedApps: MutableList<String>? = null
+        if (!ApplicationPreferences.get(
+                ApplicationPreferences.AUTO_BACKUP_APPS_KEY,
+                ApplicationPreferences.AUTO_BACKUP_APPS_DEFAULT)) return
+
+        var crash = false
+        var (backedApps, errors) = getPersistedAutoBackupAppsData()
         try {
             val appsToBeBacked = getAppsThatNeedsToBeBacked()
             if (appsToBeBacked != null) {
                 for (packageInfo in appsToBeBacked) {
                     if (!MainService.doBackup(applicationContext, packageInfo)) {
-                        success = false
-                        break
+                        errors ++
+                        continue
                     }
-                    if (backedApps == null) backedApps = mutableListOf()
-                    backedApps.add(
+                    backedApps[packageInfo.packageName] =
                         PackageManagerUtilities.getApplicationLabel(
                             applicationContext,
                             packageInfo.packageName,
                             packageInfo.packageName
                         )
-                    )
                 }
             }
         } catch (e: Exception) {
             LogUtilities.show(this@MainBackupWorker, e)
-            success = false
+            crash = true
         }
-        val notification = getBackedAppsNotification(success, backedApps)
-        if (notification != null &&
-            PermissionUtilities.permissionGranted(applicationContext, Manifest.permission.POST_NOTIFICATIONS)
-        ) {
-            NotificationManagerCompat.from(applicationContext).notify(BACKED_APPS_NOTIFICATION_ID, notification)
+
+        val now = System.currentTimeMillis()
+        ApplicationPreferences.put(ApplicationPreferences.LAST_AUTO_BACKUP_TIME_KEY, now)
+        persistAutoBackupAppsData(backedApps, errors)
+
+        if (PermissionUtilities.permissionGranted(applicationContext, Manifest.permission.POST_NOTIFICATIONS)) {
+            val notification = getBackedAppsNotification(backedApps, crash, errors)
+            val notificationId = if (crash) BACKED_APPS_ERROR_NOTIFICATION_ID else BACKED_APPS_NOTIFICATION_ID
+            NotificationManagerCompat.from(applicationContext).notify(notificationId, notification)
         }
-        applicationContext.sendBroadcast(Intent(MainService.ACTION_AUTO_BACKUP_APPS_DONE))
-        MainService.execute(applicationContext, INTERVAL_BEFORE_AUTO_BACKUP_APPS)
+
+        val intent = Intent(ACTION_AUTO_BACKUP_APPS_DONE)
+        intent.putExtra(EXTRA_CRASH, crash)
+        intent.putExtra(EXTRA_BACKED_APPS_COUNT, backedApps.size)
+        intent.putExtra(EXTRA_ERRORS_COUNT, errors)
+        applicationContext.sendBroadcast(intent)
+
+        setNextExecutionTime(applicationContext, false, now)
     }
 
     companion object {
         private const val SERVICE_NOTIFICATION_ID = 1001
         private const val BACKED_APPS_NOTIFICATION_ID = SERVICE_NOTIFICATION_ID + 1
-        private const val INTERVAL_BEFORE_AUTO_BACKUP_APPS = 6 * DateUtils.HOUR_IN_MILLIS
+        private const val BACKED_APPS_ERROR_NOTIFICATION_ID = BACKED_APPS_NOTIFICATION_ID + 1
+
+        const val AUTO_BACKUP_APPS_WORKER_TAG = "auto-backup-apps"
+
+        const val ACTION_NOTIFICATION_DISMISSED = BuildConfig.APPLICATION_ID + ".NOTIFICATION_DISMISSED";
+        const val ACTION_AUTO_BACKUP_APPS_DONE = BuildConfig.APPLICATION_ID + ".AUTO_BACKUPS_DONE"
+        const val EXTRA_CRASH = "crash"
+        const val EXTRA_BACKED_APPS_COUNT = "backedCount"
+        const val EXTRA_ERRORS_COUNT = "errorsCount"
+
+        private const val INTERVAL_BEFORE_AUTO_BACKUP_APPS = 4 * DateUtils.HOUR_IN_MILLIS
+        @SuppressLint("DefaultLocale")
+        private fun setNextExecutionTime(context: Context, force: Boolean, lastBackupTime: Long) {
+            if (!ApplicationPreferences.get(
+                    ApplicationPreferences.AUTO_BACKUP_APPS_KEY,
+                    ApplicationPreferences.AUTO_BACKUP_APPS_DEFAULT)) return
+
+            val lastAutoBackupTime = lastBackupTime.takeIf { it > 0L }
+                ?: ApplicationPreferences.get(ApplicationPreferences.LAST_AUTO_BACKUP_TIME_KEY, 0L)
+            val now = System.currentTimeMillis()
+            val elapsed = now - lastAutoBackupTime
+            val nextExecutionTime = if ((elapsed >= INTERVAL_BEFORE_AUTO_BACKUP_APPS) || force) {
+                0
+            } else {
+                INTERVAL_BEFORE_AUTO_BACKUP_APPS - elapsed
+            }
+
+            val request = OneTimeWorkRequestBuilder<MainBackupWorker>()
+                .setInitialDelay(nextExecutionTime, TimeUnit.MILLISECONDS)
+                .addTag(AUTO_BACKUP_APPS_WORKER_TAG)
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                AUTO_BACKUP_APPS_WORKER_TAG,
+                ExistingWorkPolicy.REPLACE,
+                request
+            )
+
+            ApplicationPreferences.put(ApplicationPreferences.NEXT_AUTO_BACKUP_TIME_KEY, now + nextExecutionTime)
+
+            LogUtilities.show(MainBackupWorker::class.java.name, String.format("Auto Backup Execution will be executed into %d seconds", nextExecutionTime / 1000))
+        }
+
+        fun onBootCompleted(context: Context) = setNextExecutionTime(context, true, 0L)
+
+        fun onPackageAddedOrUpdated(context: Context) = setNextExecutionTime(context, false, 0L)
+
+        fun onAppExecuted(context: Context) = setNextExecutionTime(context, false, 0L)
+
+        fun onBackupForced(context: Context) = setNextExecutionTime(context, true, 0L)
     }
 }
